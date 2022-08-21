@@ -21,12 +21,12 @@ from Crypto import Random
 from Crypto.Cipher import AES
 
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"falabella-356122-a0fc362da30c.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"x-oxygen-360101-a0fc362da30c.json"
 key='test_1'
 
 #la key debe buscarse en el key vault (secret manager)
 
-BIGQUERY_TABLE = "falabella-356122:medium.medium_test"
+BIGQUERY_TABLE = "x-oxygen-360101:medium.medium_test"
 BIGQUERY_SCHEMA = "timestamp:TIMESTAMP,attr1:FLOAT,msg:STRING"
 
 #information encryption
@@ -138,7 +138,7 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
     options1 = PipelineOptions(
     pipeline_args,
     runner='DataflowRunner',
-    project='falabella-356122',
+    project='x-oxygen-360101',
     job_name='test-yohan-seb-c',
     temp_location='gs://temp-medium/temp1',
     region='southamerica-east1',
@@ -157,7 +157,7 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
             #| "Window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
             #| "Write to GCS" >> ParDo(WriteToGCS(output_path))
         )
-        write_dead=work | 'Write to dead pubsub' >> beam.io.WriteToPubSub(topic="projects/falabella-356122/topics/casino-dead")
+        write_dead=work | 'Write to dead pubsub' >> beam.io.WriteToPubSub(topic="projects/x-oxygen-360101/topics/casino-dead")
         windows_into = work | "window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
         parse_1= work| "CustomParse" >> beam.ParDo(CustomParsing())
         windows_size = parse_1 | "Fixed-size windows" >> beam.WindowInto(window.FixedWindows(window_interval_sec, 0))
@@ -208,7 +208,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--output_table",
-        #default="falabella-356122:falabella.Test1", 
+        #default="x-oxygen-360101:falabella.Test1", 
         help="Output BigQuery table for results specified as: "
         "PROJECT:DATASET.TABLE or DATASET.TABLE.",
         default=BIGQUERY_TABLE
