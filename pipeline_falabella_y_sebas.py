@@ -140,7 +140,7 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
     runner='DataflowRunner',
     project='x-oxygen-360101',
     job_name='test-yohan-seb-c',
-    temp_location='gs://temp-medium/temp1',
+    temp_location='gs://temp-medium1/temp1',
     region='us-east1',
     service_account_email='684034867805-compute@developer.gserviceaccount.com',
     streaming = True,
