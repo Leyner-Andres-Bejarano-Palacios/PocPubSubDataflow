@@ -141,8 +141,8 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
     project='x-oxygen-360101',
     job_name='test-yohan-seb-c',
     temp_location='gs://temp-medium/temp1',
-    region='southamerica-east1',
-    service_account_email='775812360577-compute@developer.gserviceaccount.com',
+    region='us-east1',
+    service_account_email='684034867805-compute@developer.gserviceaccount.com',
     streaming = True,
     save_main_session= True,
     )
