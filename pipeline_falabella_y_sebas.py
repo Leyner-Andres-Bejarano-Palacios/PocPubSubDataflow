@@ -30,60 +30,14 @@ BIGQUERY_TABLE = "x-oxygen-360101:medium.medium_test"
 BIGQUERY_SCHEMA = "timestamp:TIMESTAMP,attr1:FLOAT,msg:STRING"
 
 #information encryption
-class AESCipher(object):
-    def __init__(self, key): 
-        self.bs = AES.block_size
-        self.key = hashlib.sha256(key.encode()).digest()
-
-    def encrypt(self,element):
-        raw = self._pad(str(element))
-        iv = Random.new().read(AES.block_size)
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return base64.b64encode(iv + cipher.encrypt(raw.encode()))
-
-    def decrypt(self, element):
-        enc = base64.b64decode(str(element))
-        iv = enc[:AES.block_size]
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return self._unpad(cipher.decrypt(enc[AES.block_size:])).decode('utf-8')
-
-    def _pad(self, s):
-        return s + (self.bs - len(s) % self.bs) * chr(self.bs - len(s) % self.bs)
-
-    def _unpad(s):
-        return s[:-ord(s[len(s)-1:])]
-
-
-class CustomParsing(beam.DoFn):
-    """ Custom ParallelDo class to apply a custom transformation """
-
-    def to_runner_api_parameter(self, unused_context):
-        # Not very relevant, returns a URN (uniform resource name) and the payload
-        return "beam:transforms:custom_parsing:custom_v0", None
-
-    def process(self, element: bytes, timestamp=beam.DoFn.TimestampParam, window=beam.DoFn.WindowParam):
-        """
-        Simple processing function to parse the data and add a timestamp
-        For additional params see:
-        https://beam.apache.org/releases/pydoc/2.7.0/apache_beam.transforms.core.html#apache_beam.transforms.core.DoFn
-        """
-        parsed = json.loads(element.decode("utf-8"))
-        parsed["timestamp"] = timestamp.to_rfc3339()
-        for clave, valor in parsed.items():
-            parsed[clave]=AESCipher(key).encrypt(parsed).decode("utf-8")
-        yield parsed
-
-
 class GroupMessagesByFixedWindows(PTransform):
     """A composite transform that groups Pub/Sub messages based on publish time
     and outputs a list of tuples, each containing a message and its publish time.
     """
-
     def __init__(self, window_size, num_shards=5):
         # Set window size to 60 seconds.
         self.window_size = int(window_size * 60)
         self.num_shards = num_shards
-
     def expand(self, pcoll):
         return (
             pcoll
@@ -97,7 +51,6 @@ class GroupMessagesByFixedWindows(PTransform):
             # memory for this. If not, you need to use `beam.util.BatchElements`.
             | "Group by key" >> GroupByKey()
         )
-
 class AddTimestamp(DoFn):
     def process(self, element, publish_time=DoFn.TimestampParam):
         """Processes each windowed element by extracting the message body and its
@@ -109,28 +62,18 @@ class AddTimestamp(DoFn):
                 "%Y-%m-%d %H:%M:%S.%f"
             ),
         )
-
 class WriteToGCS(DoFn):
     def __init__(self, output_path):
         self.output_path = output_path
-
     def process(self, key_value, window=DoFn.WindowParam):
         """Write messages in a batch to Google Cloud Storage."""
-
         ts_format = "%H:%M"
         window_start = window.start.to_utc_datetime().strftime(ts_format)
         window_end = window.end.to_utc_datetime().strftime(ts_format)
         shard_id, batch = key_value
         filename = "-".join([self.output_path, window_start, window_end, str(shard_id)])
-
         with io.gcsio.GcsIO().open(filename=filename, mode="w") as f:
             for message_body, publish_time in batch:
-                try:
-                    message_body = json.loads(message_body)
-                except:
-                    message_body=message_body
-                for clave, valor in message_body.items():
-                    message_body[clave]=AESCipher(key).encrypt(message_body).decode("utf-8")
                 f.write(f"{message_body},{publish_time}\n".encode("utf-8"))
 
 def run(input_subscription, output_path, output_table, window_interval_sec, window_size=1.0, num_shards=5, pipeline_args=None):
@@ -147,31 +90,15 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
     save_main_session= True,
     )
     with Pipeline(options=options1) as pipeline:
-        work= (
+        (
             pipeline
             # Because `timestamp_attribute` is unspecified in `ReadFromPubSub`, Beam
             # binds the publish time returned by the Pub/Sub server for each message
             # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
             # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
-            | "Read from Pub/Sub" >> io.ReadFromPubSub(subscription=input_subscription)
-            #| "Window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
-            #| "Write to GCS" >> ParDo(WriteToGCS(output_path))
-        )
-        write_dead=work | 'Write to dead pubsub' >> beam.io.WriteToPubSub(topic="projects/x-oxygen-360101/topics/casino-dead")
-        windows_into = work | "window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
-        parse_1= work| "CustomParse" >> beam.ParDo(CustomParsing())
-        windows_size = parse_1 | "Fixed-size windows" >> beam.WindowInto(window.FixedWindows(window_interval_sec, 0))
-        gcs_write = windows_into | "Write to GCS" >> ParDo(WriteToGCS(output_path))
-        
-
-        bq_write = windows_size | "Write to Big Query" >> beam.io.WriteToBigQuery(
-            BIGQUERY_TABLE,
-            #table_FALABELLA,
-            schema=BIGQUERY_SCHEMA,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            #create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED
-            #write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
-        )
+            | "Read from Pub/Sub" >> io.ReadFromPubSub(topic=input_topic)
+            | "Window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
+            | "Write to GCS" >> ParDo(WriteToGCS(output_path))
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
