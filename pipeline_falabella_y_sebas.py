@@ -82,7 +82,7 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
     pipeline_args,
     runner='DataflowRunner',
     project='x-oxygen-360101',
-    job_name='test-yohan-seb-4',
+    job_name='omega-1',
     temp_location='gs://temp-medium1/temp1',
     region='us-east1',
     service_account_email='684034867805-compute@developer.gserviceaccount.com',
@@ -96,7 +96,7 @@ def run(input_subscription, output_path, output_table, window_interval_sec, wind
             # binds the publish time returned by the Pub/Sub server for each message
             # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
             # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
-            | "Read from Pub/Sub" >> io.ReadFromPubSub(topic=input_topic)
+            | "Read from Pub/Sub" >> io.ReadFromPubSub(subscription=input_subscription)
             | "Window into" >> GroupMessagesByFixedWindows(window_size, num_shards)
             | "Write to GCS" >> ParDo(WriteToGCS(output_path))
 
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_subscription",
         help="The Cloud Pub/Sub topic to read from."
-        '"projects/<PROJECT_ID>/topics/<TOPIC_ID>".',
+        '"projects/<PROJECT_ID>/subscriptions/<TOPIC_ID>".',
     )
     parser.add_argument(
         "--window_size",
